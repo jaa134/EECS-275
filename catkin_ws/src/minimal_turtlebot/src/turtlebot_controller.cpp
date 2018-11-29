@@ -3,6 +3,7 @@
 #include "iostream"
 #include "string"
 #include "sstream"
+#include <math.h>    
 
 /*
   ********************
@@ -26,7 +27,7 @@ void debug(std::string message) {
 }
 
 template < typename T > std::string to_string(const T& n) {
-    std::ostringstream stm ;
+    std::ostringstream stm;
     stm << n ;
     return stm.str() ;
 }
@@ -38,17 +39,25 @@ void turtlebot_controller(turtlebotInputs turtlebot_inputs, uint8_t *soundValue,
     //default state
     *vel = FORWARD;
     *ang_vel = NONE;
+	*soundValue = NO_SOUND;
 	
 	const int maxAccel = 20;
 	float xAccel = turtlebot_inputs.linearAccelX;
 	float yAccel = turtlebot_inputs.linearAccelY;
 	float zAccel = turtlebot_inputs.linearAccelZ;
-    if (xAccel  > maxAccel && yAccel > maxAccel && zAccel > maxAccel){
+    float xyAccel = sqrt((xAccel * xAccel) + (yAccel * yAccel));
+	float linearAccel = atan2(zAccel, xyAccel) * 180/3.14159265;
+	std::cout << "linear: " << linearAccel << std::endl;
+	std::cout << "x: \t" << xAccel << std::endl;
+	std::cout << "y: \t" << yAccel << std::endl;
+	std::cout << "z: \t" << zAccel << std::endl;
+    if (linearAccel > 110 || linearAccel < 70){ 
       *vel = NONE;
       *ang_vel = NONE;
-      *soundValue = 4;
+      *soundValue = ERROR;
 	  return;
-    };
+    }
+
 	bool lwd = turtlebot_inputs.leftWheelDropped;
 	bool rwd = turtlebot_inputs.rightWheelDropped;
     if (handleWheelDrop(lwd, rwd, soundValue, vel, ang_vel)){
@@ -75,56 +84,48 @@ void turtlebot_controller(turtlebotInputs turtlebot_inputs, uint8_t *soundValue,
 }
 
 bool handleWheelDrop(bool lwd, bool rwd, uint8_t *soundValue,  float *vel, float *ang_vel){
-  if (lwd == 1 || rwd == 1){
+  if (lwd || rwd){
     *vel = NONE;
     *ang_vel = NONE;
-    *soundValue = 4;
+    *soundValue = PRESENCE;
 	return true;
   }
   return false;
 }
 
 bool iter = false;
-long obsActionDuration = 1500000000;//0; //15 seconds. FIX
+long obsActionDuration = 15000000000;//15 seconds
 long obsStartTime = 0;
 bool handleSenseObstacle(long currTime,float ranges[], uint8_t *soundValue,  float *vel, float *ang_vel){
-  int numPoints = 0;
-  float total = 0.0;
-
-  if (iter == false){
+  if (!iter){
     for (int i = 0; i < 640; i++){
-		if (!isnan(ranges[i])){
-	       numPoints++;
-		   total += ranges[i];
+	  if (!isnan(ranges[i]) && ranges[i] < 0.5){
+        *vel = NONE;
+        *ang_vel = NONE;
+        iter = true;
+        obsStartTime = currTime;
+        return true;
       }
 	}
-
-    if (total/numPoints < 0.5){ //check to see if an obstacle is close
-      *vel = NONE;
-      *ang_vel = NONE;
-      *soundValue = 2;
-      iter = true;
-      obsStartTime = currTime;
-      return true;
-    }
   }
   else if (currTime < obsStartTime + obsActionDuration){
 	*vel = NONE;
     *ang_vel = NONE;
+    *soundValue = PRESENCE;
 	return true;
   }
   else if (iter) { // start rotating
 	*vel = NONE;
     *ang_vel = RIGHT;
 
+    float minPoint = 999;
     for (int i = 0; i < 640; i++){
-		if (!isnan(ranges[i])){
-	       numPoints++;
-		   total += ranges[i];
+		if (!isnan(ranges[i]) && ranges[i] < minPoint){
+		  minPoint = ranges[i];
       }
 	}
 
-    if (total/numPoints >= 0.5){ //check to see if an obstacle is close
+    if (minPoint >= 0.5){ //check to see if an obstacle is close
         *ang_vel = NONE;
         *vel = FORWARD;
 		iter = false;
@@ -145,6 +146,7 @@ bool handleCliffSensors(long currTime, bool lcs, bool ccs, bool rcs, float *vel,
   /*********
   * CENTER *
   *********/
+
   if (ccs)
       ccStartTime = currTime;
   if (currTime < ccStartTime + (0.25 * cActionDuration)) {
