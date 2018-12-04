@@ -21,66 +21,70 @@ bool handleCliffSensors(long, bool, bool, bool, float*, float*);
 bool handleBumpers(long, bool, bool, bool, float*, float*);
 bool handleSenseObstacle(long, float[], uint8_t*, float*, float* );
 bool handleWheelDrop(bool, bool, uint8_t*, float*, float*);
+bool isAtDestination();
+void spinFourTimes(float, float*, float*);
 
 void debug(std::string message) {
-    std::cout << "DEBUG: " << message << std::endl;
+  std::cout << "DEBUG: " << message << std::endl;
 }
 
 template < typename T > std::string to_string(const T& n) {
-    std::ostringstream stm;
-    stm << n ;
-    return stm.str() ;
+  std::ostringstream stm;
+  stm << n ;
+  return stm.str() ;
 }
 
 void turtlebot_controller(turtlebotInputs turtlebot_inputs, uint8_t *soundValue, float *vel, float *ang_vel)
 {
-    long currTime = turtlebot_inputs.nanoSecs;
+  if (isAtDestination() && !isnan(turtlebot_inputs.orientation_omega)) {
+    float orientationAngle = turtlebot_inputs.orientation_omega;
+    spinFourTimes(orientationAngle, vel, ang_vel);
+    return;
+  }
 
-    //default state
-    *vel = FORWARD;
+  long currTime = turtlebot_inputs.nanoSecs;
+
+  //default state
+  *vel = FORWARD;
+  *ang_vel = NONE;
+  *soundValue = NO_SOUND;
+  
+  const int maxAccel = 20;
+  float xAccel = turtlebot_inputs.linearAccelX;
+  float yAccel = turtlebot_inputs.linearAccelY;
+  float zAccel = turtlebot_inputs.linearAccelZ;
+  float xyAccel = sqrt((xAccel * xAccel) + (yAccel * yAccel));
+  float linearAccel = atan2(zAccel, xyAccel) * 180/3.14159265;
+  if (linearAccel > 110 || linearAccel < 70){ 
+    *vel = NONE;
     *ang_vel = NONE;
-	*soundValue = NO_SOUND;
-	
-	const int maxAccel = 20;
-	float xAccel = turtlebot_inputs.linearAccelX;
-	float yAccel = turtlebot_inputs.linearAccelY;
-	float zAccel = turtlebot_inputs.linearAccelZ;
-    float xyAccel = sqrt((xAccel * xAccel) + (yAccel * yAccel));
-	float linearAccel = atan2(zAccel, xyAccel) * 180/3.14159265;
-	std::cout << "linear: " << linearAccel << std::endl;
-	std::cout << "x: \t" << xAccel << std::endl;
-	std::cout << "y: \t" << yAccel << std::endl;
-	std::cout << "z: \t" << zAccel << std::endl;
-    if (linearAccel > 110 || linearAccel < 70){ 
-      *vel = NONE;
-      *ang_vel = NONE;
-      *soundValue = ERROR;
-	  return;
-    }
+    *soundValue = ERROR;
+    return;
+  }
 
-	bool lwd = turtlebot_inputs.leftWheelDropped;
-	bool rwd = turtlebot_inputs.rightWheelDropped;
-    if (handleWheelDrop(lwd, rwd, soundValue, vel, ang_vel)){
-		return;
-	}
-	
-    if (handleSenseObstacle(currTime, turtlebot_inputs.ranges, soundValue, vel, ang_vel)){
-		return;
-	}
+  bool lwd = turtlebot_inputs.leftWheelDropped;
+  bool rwd = turtlebot_inputs.rightWheelDropped;
+  if (handleWheelDrop(lwd, rwd, soundValue, vel, ang_vel)){
+    return;
+  }
+  
+  if (handleSenseObstacle(currTime, turtlebot_inputs.ranges, soundValue, vel, ang_vel)){
+    return;
+  }
 
-    bool lcs = turtlebot_inputs.sensor0State;
-    bool ccs = turtlebot_inputs.sensor1State;
-    bool rcs = turtlebot_inputs.sensor2State;
-    if (handleCliffSensors(currTime, lcs, ccs, rcs, vel, ang_vel)){
-		return;
-	}
+  bool lcs = turtlebot_inputs.sensor0State;
+  bool ccs = turtlebot_inputs.sensor1State;
+  bool rcs = turtlebot_inputs.sensor2State;
+  if (handleCliffSensors(currTime, lcs, ccs, rcs, vel, ang_vel)){
+    return;
+  }
 
-    bool lb = turtlebot_inputs.leftBumperPressed;
-    bool cb = turtlebot_inputs.centerBumperPressed;
-    bool rb = turtlebot_inputs.rightBumperPressed;
-    if (handleBumpers(currTime, lb, cb, rb, vel, ang_vel)) {
-		return;
-	}
+  bool lb = turtlebot_inputs.leftBumperPressed;
+  bool cb = turtlebot_inputs.centerBumperPressed;
+  bool rb = turtlebot_inputs.rightBumperPressed;
+  if (handleBumpers(currTime, lb, cb, rb, vel, ang_vel)) {
+    return;
+  }
 }
 
 bool handleWheelDrop(bool lwd, bool rwd, uint8_t *soundValue,  float *vel, float *ang_vel){
@@ -88,7 +92,7 @@ bool handleWheelDrop(bool lwd, bool rwd, uint8_t *soundValue,  float *vel, float
     *vel = NONE;
     *ang_vel = NONE;
     *soundValue = PRESENCE;
-	return true;
+    return true;
   }
   return false;
 }
@@ -99,37 +103,37 @@ long obsStartTime = 0;
 bool handleSenseObstacle(long currTime,float ranges[], uint8_t *soundValue,  float *vel, float *ang_vel){
   if (!iter){
     for (int i = 0; i < 640; i++){
-	  if (!isnan(ranges[i]) && ranges[i] < 0.5){
+      if (!isnan(ranges[i]) && ranges[i] < 0.5){
         *vel = NONE;
         *ang_vel = NONE;
         iter = true;
         obsStartTime = currTime;
         return true;
       }
-	}
+    }
   }
   else if (currTime < obsStartTime + obsActionDuration){
-	*vel = NONE;
+    *vel = NONE;
     *ang_vel = NONE;
     *soundValue = PRESENCE;
-	return true;
+    return true;
   }
   else if (iter) { // start rotating
-	*vel = NONE;
+    *vel = NONE;
     *ang_vel = RIGHT;
 
     float minPoint = 999;
     for (int i = 0; i < 640; i++){
-		if (!isnan(ranges[i]) && ranges[i] < minPoint){
-		  minPoint = ranges[i];
+      if (!isnan(ranges[i]) && ranges[i] < minPoint){
+        minPoint = ranges[i];
       }
-	}
+    }
 
     if (minPoint >= 0.5){ //check to see if an obstacle is close
-        *ang_vel = NONE;
-        *vel = FORWARD;
-		iter = false;
-        return true;
+      *ang_vel = NONE;
+      *vel = FORWARD;
+      iter = false;
+      return true;
     }
   }
   else {
@@ -141,7 +145,6 @@ long cActionDuration = 4000000000;
 long lcStartTime = 0;
 long ccStartTime = 0;
 long rcStartTime = 0;
-
 bool handleCliffSensors(long currTime, bool lcs, bool ccs, bool rcs, float *vel, float *ang_vel) {
   /*********
   * CENTER *
@@ -230,7 +233,6 @@ long bActionDuration = 4000000000;
 long lbStartTime = 0;
 long cbStartTime = 0;
 long rbStartTime = 0;
-
 bool handleBumpers(long currTime, bool lb, bool cb, bool rb, float *vel, float *ang_vel) {
     /*********
     * CENTER *
@@ -310,8 +312,45 @@ bool handleBumpers(long currTime, bool lb, bool cb, bool rb, float *vel, float *
         return true;
     }
 
-	return false;
+  return false;
 }
 
+bool isAtDestination() {
+  return true;
+}
 
+bool isSpinning;
+bool didCount;
+int turnCount;
+float startingOrientation;
+void spinFourTimes(float currentAngle, float *vel, float *ang_vel) {
+  if (!isSpinning) {
+    startingOrientation = currentAngle;
+    isSpinning = true;
+    *vel = NONE;
+    *ang_vel = NONE;
+    turnCount = 0;
+  }
+  else if (turnCount >= 4) {
+    std::cout << "DEBUG: " << "2" << std::endl;
+    *vel = NONE;
+    *ang_vel = NONE;
+  }
+  else if (abs(currentAngle - startingOrientation) < 0.05 && !didCount){
+    std::cout << "DEBUG: " << "TURN COUNT INCREMENTED " << turnCount << std::endl;
+    turnCount++;
+    *vel = NONE;
+    *ang_vel = RIGHT;
+    didCount = true;
+  }
+  else if (abs(currentAngle - startingOrientation) >= 0.05) {
+    *vel = NONE;
+    *ang_vel = RIGHT;
+    didCount = false;
+  }
+  else {
+    *ang_vel = RIGHT;
+    *vel = NONE;
+  }
+}
 
