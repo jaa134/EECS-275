@@ -21,8 +21,11 @@ bool handleCliffSensors(long, bool, bool, bool, float*, float*);
 bool handleBumpers(long, bool, bool, bool, float*, float*);
 bool handleSenseObstacle(long, float[], uint8_t*, float*, float* );
 bool handleWheelDrop(bool, bool, uint8_t*, float*, float*);
-bool isAtDestination();
+bool isAtDestination(/*std::pair<float, float>, turtlebotInputs*/);
 void spinFourTimes(float, float*, float*);
+void destination(std::vector< std::pair<float, float> >, turtlebotInputs);
+void findDestination(std::pair<float, float>);
+std::vector< std::pair<float, float> > setDestination();
 
 void debug(std::string message) {
   std::cout << "DEBUG: " << message << std::endl;
@@ -36,8 +39,14 @@ template < typename T > std::string to_string(const T& n) {
 
 void turtlebot_controller(turtlebotInputs turtlebot_inputs, uint8_t *soundValue, float *vel, float *ang_vel)
 {
+  std::cout << "DEBUG X: " << turtlebot_inputs.x << std::endl;
+  std::cout << "DEBUG Y: " << turtlebot_inputs.y << std::endl;
+
   if (isAtDestination() && !isnan(turtlebot_inputs.orientation_omega)) {
-    float orientationAngle = turtlebot_inputs.orientation_omega;
+  	float zAngle = turtlebot_inputs.z_angle;
+    float omega = turtlebot_inputs.orientation_omega;
+    float orientationAngle = 2 * atan2(omega , zAngle);
+    std::cout << "DEBUG: " << orientationAngle << std::endl;
     spinFourTimes(orientationAngle, vel, ang_vel);
     return;
   }
@@ -315,8 +324,14 @@ bool handleBumpers(long currTime, bool lb, bool cb, bool rb, float *vel, float *
   return false;
 }
 
-bool isAtDestination() {
-  return true;
+bool isAtDestination(/*std::pair<float, float> location, turtlebotInputs turtlebot_inputs*/) {
+	// float x = turtlebot_inputs.x;
+	// float y = turtlebot_inputs.y;
+ //  	if(x == location.first && y == location.second)
+ //  	{
+ //  		return true;
+ //  	}
+  	return false;
 }
 
 bool isSpinning;
@@ -324,6 +339,7 @@ bool didCount;
 int turnCount;
 float startingOrientation;
 void spinFourTimes(float currentAngle, float *vel, float *ang_vel) {
+  float angDiff = fabs(currentAngle - startingOrientation);
   if (!isSpinning) {
     startingOrientation = currentAngle;
     isSpinning = true;
@@ -331,19 +347,17 @@ void spinFourTimes(float currentAngle, float *vel, float *ang_vel) {
     *ang_vel = NONE;
     turnCount = 0;
   }
-  else if (turnCount >= 4) {
-    std::cout << "DEBUG: " << "2" << std::endl;
+  else if (turnCount > 2) {
     *vel = NONE;
     *ang_vel = NONE;
   }
-  else if (abs(currentAngle - startingOrientation) < 0.05 && !didCount){
-    std::cout << "DEBUG: " << "TURN COUNT INCREMENTED " << turnCount << std::endl;
+  else if (angDiff < 0.5 && !didCount){
     turnCount++;
     *vel = NONE;
     *ang_vel = RIGHT;
     didCount = true;
   }
-  else if (abs(currentAngle - startingOrientation) >= 0.05) {
+  else if (abs(currentAngle - startingOrientation) >= 0.5) {
     *vel = NONE;
     *ang_vel = RIGHT;
     didCount = false;
@@ -352,5 +366,41 @@ void spinFourTimes(float currentAngle, float *vel, float *ang_vel) {
     *ang_vel = RIGHT;
     *vel = NONE;
   }
+}
+
+void destination(std::vector< std::pair<float, float> > v, turtlebotInputs turtlebot_inputs)
+{
+	// if (v.empty()) {
+	// 	return;
+	// }
+	// else if(isAtDestination(v.at(0), turtlebot_inputs)){
+	// 	v.erase(v.begin());
+	// 	spinFourTimes();
+	// 	findDestination(v.at(0));
+	// }
+	// else {
+	// 	findDestination(v.at(0));
+	// }
+}
+
+void findDestination(std::pair<float, float> dest) {
+	// if (currentX < dest.first){
+	// 	//move Left
+	// 		}
+	// else {
+	// 	//move right
+	// }
+
+
+}
+
+std::vector< std::pair<float, float> > setDestination()
+{
+	// std::vector< std::pair<float, float> > destination;
+	// std::pair<int,int> aPair;
+	// aPair.first = 0;
+	// aPair.second = 5;
+	// destination.push_back(aPair);
+	// return destination;
 }
 
